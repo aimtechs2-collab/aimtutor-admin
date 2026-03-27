@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  student
+  instructor
+  admin
+}
+
+enum CourseStatus {
+  draft
+  published
+}
+
+enum ModeOfConduct {
+  online
+  offline
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  passwordHash  String    @map("password_hash")
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  role           UserRole
+  isActive      Boolean   @default(true) @map("is_active")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  phone          String? 
+  profilePicture String? @map("profile_picture")
+  googleId       String? @map("google_id")
+  bio            String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  enrollments     Enrollment[]
+  notifications   Notification[]
+  coursesTaught   Course[] @relation("InstructorCourses")
+  payments        Payment[]
+  certificates    Certificate[]
+
+  @@map("users")
+}
+
+model MasterCategory {
+  id      Int    @id @default(autoincrement())
+  name    String @unique
+  reviews Int    @default(0)
+
+  subcategories SubCategory[]
+
+  @@map("master_categories")
+}
+
+model SubCategory {
+  id                Int @id @default(autoincrement())
+  name              String
+  masterCategoryId Int  @map("master_category_id")
+
+  masterCategory MasterCategory @relation(fields: [masterCategoryId], references: [id])
+  courses         Course[]
+
+  @@map("sub_categories")
+}
+
+model Course {
+  id                Int      @id @default(autoincrement())
+  title             String
+  description       String?
+  shortDescription  String? @map("short_description")
+  subcategoryId     Int?    @map("subcategory_id")
+  instructorId      Int      @map("instructor_id")
+  price             Decimal @db.Decimal(10, 2)
+  currency          String   @default("USD")
+  durationHours     Int?     @map("duration_hours")
+  difficultyLevel   String?  @map("difficulty_level")
+  thumbnail         String?
+  status            CourseStatus
+  maxStudents       Int?     @map("max_students")
+  prerequisites     String?
+  learningOutcomes String?  @map("learning_outcomes")
+  isActive          Boolean? @default(false) @map("is_active")
+  modeOfConduct     ModeOfConduct @default(offline) @map("mode_of_conduct")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  prerequisitesCourseId Int? @map("prerequisites_course_id")
+
+  subcategory SubCategory? @relation(fields: [subcategoryId], references: [id])
+  instructor  User          @relation("InstructorCourses", fields: [instructorId], references: [id])
+
+  modules     CourseModule[]
+  enrollments Enrollment[]
+  payments    Payment[]
+  certificates Certificate[]
+  liveSessions LiveSession[]
+
+  @@map("courses")
+}
+
+model CourseModule {
+  id           Int      @id @default(autoincrement())
+  courseId     Int      @map("course_id")
+  title        String
+  description  String?
+  durationMinutes Int? @map("duration_minutes")
+  sortOrder    Int     @map("order")
+  isPreview     Boolean @default(false) @map("is_preview")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  course  Course @relation(fields: [courseId], references: [id])
+  lessons Lesson[]
+
+  @@map("course_modules")
+}
+
+model Lesson {
+  id              Int     @id @default(autoincrement())
+  moduleId       Int     @map("module_id")
+  title          String
+  content        String?
+  videoUrl       String? @map("video_url")
+  resourceLink   String? @map("resource_link")
+  durationMinutes Int?   @map("duration_minutes")
+  sortOrder      Int     @map("order")
+  isPreview      Boolean @default(false) @map("is_preview")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  module      CourseModule @relation(fields: [moduleId], references: [id])
+  resources   LessonResource[]
+  progress    LessonProgress[]
+
+  @@map("lessons")
+}
+
+model LessonResource {
+  id              Int      @id @default(autoincrement())
+  lessonId       Int      @map("lesson_id")
+  title          String
+  filePath       String   @map("file_path")
+  fileType       String?  @map("file_type")
+  fileSize       Int?     @map("file_size")
+  isActive       Boolean  @default(false) @map("is_active")
+  durationMinutes Int?    @map("duration_minutes")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+
+  @@map("lesson_resources")
+}
+
+model Enrollment {
+  id                 Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  courseId          Int      @map("course_id")
+  enrolledAt        DateTime @default(now()) @map("enrolled_at")
+  completedAt       DateTime? @map("completed_at")
+  progressPercentage Float    @default(0.0) @map("progress_percentage")
+  isActive          Boolean   @default(true) @map("is_active")
+
+  user           User   @relation(fields: [userId], references: [id])
+  course         Course @relation(fields: [courseId], references: [id])
+  lessonProgress LessonProgress[]
+
+  @@unique([userId, courseId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  id              Int      @id @default(autoincrement())
+  enrollmentId   Int      @map("enrollment_id")
+  lessonId       Int      @map("lesson_id")
+  completed      Boolean  @default(false)
+  completedAt    DateTime? @map("completed_at")
+  watchTimeSeconds Int     @default(0) @map("watch_time_seconds")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  lesson     Lesson     @relation(fields: [lessonId], references: [id])
+
+  @@unique([enrollmentId, lessonId])
+  @@map("lesson_progress")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  title     String
+  message   String
+  type       String?
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  userId        Int           @map("user_id")
+  courseId      Int           @map("course_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  status        PaymentStatus @default(pending)
+  orderId       String?       @map("order_id")
+  paymentId     String?       @map("payment_id")
+  signature     String?
+  paymentMethod String?       @map("payment_method")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@map("payments")
+}
+
+model Certificate {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  courseId          Int      @map("course_id")
+  certificateNumber String   @unique @map("certificate_number")
+  issuedAt          DateTime @default(now()) @map("issued_at")
+  filePath          String?  @map("file_path")
+  verificationUrl   String?  @map("verification_url")
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@map("certificates")
+}
+
+model LiveSession {
+  id              Int      @id @default(autoincrement())
+  courseId        Int      @map("course_id")
+  title           String
+  description     String?
+  scheduledAt     DateTime @map("scheduled_at")
+  durationMinutes Int      @map("duration_minutes")
+  meetingUrl      String?  @map("meeting_url")
+  meetingId       String?  @map("meeting_id")
+  meetingPassword String?  @map("meeting_password")
+  isRecorded      Boolean  @default(false) @map("is_recorded")
+  recordingUrl    String?  @map("recording_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@map("live_sessions")
+}
+
+/// Public lead capture (legacy Flask `contact_form` table).
+model ContactForm {
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(100)
+  email          String   @db.VarChar(100)
+  message        String?
+  courseInterest String?  @map("course_interest") @db.VarChar(100)
+  phoneNumber    String   @map("phone_number") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("contact_form")
+}
+
