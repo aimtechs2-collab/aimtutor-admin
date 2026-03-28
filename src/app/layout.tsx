@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const signInUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || "/sign-in";
+const signUpUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || "/sign-up";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -33,7 +36,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider signInUrl={signInUrl} signUpUrl={signUpUrl}>
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );

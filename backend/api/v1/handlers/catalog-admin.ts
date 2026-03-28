@@ -64,6 +64,8 @@ export async function createSubcategory(body: any) {
   });
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern("public:mastercategories*");
+  // Must match keys in public.ts getMastercategoryById: `public:mastercategory:${id}:crs=*`
+  await invalidateCachePattern(`public:mastercategory:${masterCategoryId}*`);
   return { message: "Subcategory created", subcategory: created };
 }
 
@@ -73,20 +75,31 @@ export async function updateSubcategory(id: number, body: any) {
   const data: any = {};
   if (typeof body?.name === "string") data.name = body.name.trim();
   if (body?.master_category_id !== undefined) data.masterCategoryId = Number(body.master_category_id);
+  const existing = await prisma.subCategory.findUnique({ where: { id } });
   const updated = await prisma.subCategory.update({ where: { id }, data });
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern(`public:subcategory:${id}*`);
   await invalidateCachePattern("public:mastercategories*");
+  if (existing?.masterCategoryId) {
+    await invalidateCachePattern(`public:mastercategory:${existing.masterCategoryId}*`);
+  }
+  if (updated.masterCategoryId !== existing?.masterCategoryId) {
+    await invalidateCachePattern(`public:mastercategory:${updated.masterCategoryId}*`);
+  }
   return { message: "Subcategory updated", subcategory: updated };
 }
 
 export async function deleteSubcategory(id: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
+  const existing = await prisma.subCategory.findUnique({ where: { id } });
   await prisma.subCategory.delete({ where: { id } });
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern(`public:subcategory:${id}*`);
   await invalidateCachePattern("public:mastercategories*");
+  if (existing?.masterCategoryId) {
+    await invalidateCachePattern(`public:mastercategory:${existing.masterCategoryId}*`);
+  }
   return { message: "Subcategory deleted" };
 }
 
@@ -141,12 +154,27 @@ export async function createCourse(body: any) {
   await invalidateCachePattern("public:courses*");
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern("public:mastercategories*");
+  if (subcategoryId != null) {
+    await invalidateCachePattern(`public:subcategory:${subcategoryId}*`);
+    const sub = await prisma.subCategory.findUnique({
+      where: { id: subcategoryId },
+      select: { masterCategoryId: true },
+    });
+    if (sub) await invalidateCachePattern(`public:mastercategory:${sub.masterCategoryId}*`);
+  }
   return { message: "Course created", course: created };
 }
 
 export async function updateCourse(id: number, body: any) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
+  const existing = await prisma.course.findUnique({
+    where: { id },
+    select: { subcategoryId: true },
+  });
+  if (!existing) {
+    return { status: 404, json: { error: "Course not found" } } as const;
+  }
   const data: any = {};
   if (typeof body?.title === "string") data.title = body.title;
   if (typeof body?.description === "string" || body?.description === null) data.description = body.description;
@@ -165,11 +193,35 @@ export async function updateCourse(id: number, body: any) {
   if (typeof body?.learning_outcomes === "string" || body?.learning_outcomes === null) data.learningOutcomes = body.learning_outcomes;
 
   const updated = await prisma.course.update({ where: { id }, data });
-  
+
   await invalidateCachePattern("public:courses*");
   await invalidateCachePattern(`public:course:${id}*`);
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern("public:mastercategories*");
+
+  const oldSub = existing.subcategoryId;
+  const newSub = updated.subcategoryId;
+  if (oldSub != null) await invalidateCachePattern(`public:subcategory:${oldSub}*`);
+  if (newSub != null && newSub !== oldSub) await invalidateCachePattern(`public:subcategory:${newSub}*`);
+
+  const masterIds = new Set<number>();
+  if (oldSub != null) {
+    const s = await prisma.subCategory.findUnique({
+      where: { id: oldSub },
+      select: { masterCategoryId: true },
+    });
+    if (s) masterIds.add(s.masterCategoryId);
+  }
+  if (newSub != null) {
+    const s = await prisma.subCategory.findUnique({
+      where: { id: newSub },
+      select: { masterCategoryId: true },
+    });
+    if (s) masterIds.add(s.masterCategoryId);
+  }
+  for (const mid of masterIds) {
+    await invalidateCachePattern(`public:mastercategory:${mid}*`);
+  }
 
   return { message: "Course updated", course: updated };
 }
@@ -177,12 +229,27 @@ export async function updateCourse(id: number, body: any) {
 export async function deleteCourse(id: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
+  const existing = await prisma.course.findUnique({
+    where: { id },
+    select: { subcategoryId: true },
+  });
+  if (!existing) {
+    return { status: 404, json: { error: "Course not found" } } as const;
+  }
   await prisma.course.delete({ where: { id } });
 
   await invalidateCachePattern("public:courses*");
   await invalidateCachePattern(`public:course:${id}*`);
   await invalidateCachePattern("public:subcategories*");
   await invalidateCachePattern("public:mastercategories*");
+  if (existing.subcategoryId != null) {
+    await invalidateCachePattern(`public:subcategory:${existing.subcategoryId}*`);
+    const sub = await prisma.subCategory.findUnique({
+      where: { id: existing.subcategoryId },
+      select: { masterCategoryId: true },
+    });
+    if (sub) await invalidateCachePattern(`public:mastercategory:${sub.masterCategoryId}*`);
+  }
 
   return { message: "Course deleted" };
 }

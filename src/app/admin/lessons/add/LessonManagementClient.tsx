@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/admin-api-client";
+import { uploadVideoToCloudinary, type CloudinarySignPayload } from "@/lib/cloudinary-upload";
 import {
   Plus,
   Edit2,
@@ -403,6 +404,16 @@ export default function LessonManagementClient() {
     }));
   }, []);
 
+  const requestCloudinarySign = useCallback(async (): Promise<CloudinarySignPayload | null> => {
+    const res = await fetch("/api/admin/cloudinary/sign-upload", { method: "POST", credentials: "same-origin" });
+    if (res.status === 503) return null;
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(j.error || "Could not prepare Cloudinary upload");
+    }
+    return res.json() as Promise<CloudinarySignPayload>;
+  }, []);
+
   const submitLesson = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -416,8 +427,26 @@ export default function LessonManagementClient() {
       }
       setLessonSubmitting(true);
       try {
+        let cloudVideoUrl: string | undefined;
+        if (lessonForm.video_file) {
+          const sign = await requestCloudinarySign();
+          if (sign) {
+            cloudVideoUrl = await uploadVideoToCloudinary(lessonForm.video_file, sign);
+          }
+        }
+
+        const durationNum = lessonForm.duration_minutes ? parseInt(String(lessonForm.duration_minutes), 10) : 0;
+
+        const jsonPayload = {
+          title: lessonForm.title,
+          content: lessonForm.content || "",
+          duration_minutes: Number.isFinite(durationNum) ? durationNum : 0,
+          is_preview: lessonForm.is_preview,
+          ...(cloudVideoUrl ? { video_url: cloudVideoUrl } : {}),
+        };
+
         if (editingLesson) {
-          if (lessonForm.video_file) {
+          if (lessonForm.video_file && !cloudVideoUrl) {
             const formData = new FormData();
             formData.append("title", lessonForm.title);
             formData.append("content", lessonForm.content || "");
@@ -426,25 +455,26 @@ export default function LessonManagementClient() {
             formData.append("video", lessonForm.video_file);
             await api.put(`/api/v1/lessons/update-lessons/${editingLesson.id}`, formData);
           } else {
-            await api.put(`/api/v1/lessons/update-lessons/${editingLesson.id}`, {
-              title: lessonForm.title,
-              content: lessonForm.content || "",
-              duration_minutes: lessonForm.duration_minutes ? parseInt(String(lessonForm.duration_minutes), 10) : 0,
-              is_preview: lessonForm.is_preview,
-            });
+            await api.put(`/api/v1/lessons/update-lessons/${editingLesson.id}`, jsonPayload);
           }
           await fetchLessons(selectedCourseId, selectedModuleId);
           setToast({ type: "success", message: "Lesson updated successfully" });
         } else {
-          const formData = new FormData();
-          formData.append("title", lessonForm.title);
-          formData.append("content", lessonForm.content || "");
-          formData.append("duration_minutes", String(lessonForm.duration_minutes || 0));
-          formData.append("is_preview", String(lessonForm.is_preview));
-          if (lessonForm.video_file) formData.append("video", lessonForm.video_file);
-          const res = await api.post<any>(`/api/v1/lessons/create-lessons/${selectedModuleId}`, formData);
-          await fetchLessons(selectedCourseId, selectedModuleId);
-          setToast({ type: "success", message: res.data?.message || "Lesson created successfully" });
+          if (lessonForm.video_file && !cloudVideoUrl) {
+            const formData = new FormData();
+            formData.append("title", lessonForm.title);
+            formData.append("content", lessonForm.content || "");
+            formData.append("duration_minutes", String(lessonForm.duration_minutes || 0));
+            formData.append("is_preview", String(lessonForm.is_preview));
+            formData.append("video", lessonForm.video_file);
+            const res = await api.post<any>(`/api/v1/lessons/create-lessons/${selectedModuleId}`, formData);
+            await fetchLessons(selectedCourseId, selectedModuleId);
+            setToast({ type: "success", message: res.data?.message || "Lesson created successfully" });
+          } else {
+            const res = await api.post<any>(`/api/v1/lessons/create-lessons/${selectedModuleId}`, jsonPayload);
+            await fetchLessons(selectedCourseId, selectedModuleId);
+            setToast({ type: "success", message: res.data?.message || "Lesson created successfully" });
+          }
         }
         closeLessonModal();
       } catch (err: any) {
@@ -454,6 +484,7 @@ export default function LessonManagementClient() {
           message:
             err.response?.data?.error ||
             err.response?.data?.message ||
+            err.message ||
             `Failed to ${editingLesson ? "update" : "create"} lesson`,
         });
       } finally {
@@ -467,6 +498,7 @@ export default function LessonManagementClient() {
       editingLesson,
       closeLessonModal,
       fetchLessons,
+      requestCloudinarySign,
     ],
   );
 
@@ -982,6 +1014,10 @@ export default function LessonManagementClient() {
                         <span className="text-blue-600 font-medium">browse</span>
                       </p>
                       <p className="text-xs text-gray-500">Supported formats: MP4, MOV, WEBM, AVI (Max: 500MB)</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        With <span className="font-medium">CLOUDINARY_URL</span> set, video goes straight to Cloudinary
+                        (no slow server hop); stored URL uses automatic quality/format optimization.
+                      </p>
                       <input
                         id="video_file"
                         ref={videoInputRef}

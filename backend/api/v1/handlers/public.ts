@@ -504,6 +504,30 @@ export async function _getCourseById(courseId: number, searchParams: URLSearchPa
     }
   }
 
+  const prereqLinks = await prisma.coursePrerequisite.findMany({
+    where: { courseId },
+    include: {
+      prerequisiteCourse: {
+        select: {
+          id: true,
+          title: true,
+          shortDescription: true,
+          thumbnail: true,
+          difficultyLevel: true,
+        },
+      },
+    },
+    orderBy: { id: "asc" },
+  });
+
+  courseData.prerequisites_courses = prereqLinks.map((row) => ({
+    id: row.prerequisiteCourse.id,
+    title: row.prerequisiteCourse.title,
+    short_description: row.prerequisiteCourse.shortDescription ?? undefined,
+    thumbnail: row.prerequisiteCourse.thumbnail ?? undefined,
+    difficulty_level: row.prerequisiteCourse.difficultyLevel ?? undefined,
+  }));
+
   return { course: courseData };
 }
 
@@ -514,6 +538,7 @@ export async function getCourseById(courseId: number, searchParams: URLSearchPar
   const les = (searchParams.get("lessons") || "").toLowerCase() === "true" ? "true" : "false";
   const lim = (searchParams.get("limited_resources") || "").toLowerCase() === "true" ? "true" : "false";
   const res = (searchParams.get("resources") || "").toLowerCase() === "true" ? "true" : "false";
-  const key = `public:course:${courseId}:les=${les}&lim=${lim}&res=${res}`;
+  // v2: includes prerequisites_courses from course_prerequisite_courses junction
+  const key = `public:course:v2:${courseId}:les=${les}&lim=${lim}&res=${res}`;
   return withCache(key, CACHE_TTL.SHORT, () => _getCourseById(courseId, searchParams, dbUserId));
 }

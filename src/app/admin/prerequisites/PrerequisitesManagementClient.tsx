@@ -223,7 +223,8 @@ export default function PrerequisitesManagementClient() {
       await fetchExistingPrerequisites(selectedCourse.id);
     } catch (err: any) {
       console.error("Failed to save prerequisites:", err);
-      const msg = err?.response?.data?.message || "Failed to save prerequisites";
+      const msg =
+        err?.response?.data?.message || err?.response?.data?.error || "Failed to save prerequisites";
       setError(msg);
       showToast("error", msg);
     } finally {

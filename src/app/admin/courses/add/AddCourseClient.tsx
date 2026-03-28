@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import CourseForm from "./CourseForm";
 import ViewCourseModal, { type CourseViewShape } from "./ViewCourseModal";
+import { thumbnailUrl } from "@/lib/staticUrl";
 
 const ANIMATIONS_CSS = `
   @keyframes fadeInUp {
@@ -53,8 +54,6 @@ const ANIMATIONS_CSS = `
   }
 `;
 
-const API_BASE_URL =
-  typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_STATIC_URL ?? "") : "";
 const ANIMATION_DELAY = 10;
 const TOAST_DURATION = 4000;
 const CACHE_KEY = "courses_cache";
@@ -74,28 +73,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   Expert: "bg-red-100 text-red-800",
   default: "bg-gray-100 text-gray-800",
 };
-
-function getImageUrl(thumbnailPath: string | null | undefined): string | null {
-  if (!thumbnailPath) return null;
-  try {
-    if (thumbnailPath.startsWith("http://") || thumbnailPath.startsWith("https://")) {
-      const url = new URL(thumbnailPath);
-      if (!["http:", "https:"].includes(url.protocol)) return null;
-      return url.href;
-    }
-    if (!API_BASE_URL && typeof window !== "undefined") {
-      const path = thumbnailPath.startsWith("/") ? thumbnailPath : `/${thumbnailPath}`;
-      return `${window.location.origin}${path}`;
-    }
-    if (!API_BASE_URL) return null;
-    const path = thumbnailPath.startsWith("/") ? thumbnailPath.slice(1) : thumbnailPath;
-    const fullUrl = new URL(path, API_BASE_URL);
-    if (!["http:", "https:"].includes(fullUrl.protocol)) return null;
-    return fullUrl.href;
-  } catch {
-    return null;
-  }
-}
 
 const getStatusColor = (status: string | undefined) =>
   STATUS_COLORS[status?.toLowerCase() ?? ""] || STATUS_COLORS.default;
@@ -451,7 +428,8 @@ export default function AddCourseClient() {
   const fetchMasterCategories = useCallback(async () => {
     try {
       const res = await api.post<any>("/api/v1/public/get-mastercategories?per_page=all");
-      setMasterCategories(res.data.mastercategories || []);
+      const payload = res.data ?? {};
+      setMasterCategories(payload.categories || payload.mastercategories || []);
     } catch (err) {
       console.error("Failed to fetch master categories:", err);
     }
@@ -460,7 +438,8 @@ export default function AddCourseClient() {
   const fetchSubCategories = useCallback(async (masterCategoryId: string) => {
     try {
       const res = await api.post<any>(`/api/v1/mastercategories/get-mastercategories/${masterCategoryId}`);
-      setSubCategories(res.data.subcategories || res.data || []);
+      const subs = res.data?.subcategories;
+      setSubCategories(Array.isArray(subs) ? subs : []);
     } catch (err) {
       console.error("Failed to fetch subcategories:", err);
     }
@@ -684,7 +663,7 @@ export default function AddCourseClient() {
                         {course.thumbnail ? (
                           <>
                             <img
-                              src={getImageUrl(course.thumbnail) ?? undefined}
+                              src={thumbnailUrl(course.thumbnail) ?? undefined}
                               alt={course.title}
                               className="w-full h-full object-cover"
                               loading="lazy"

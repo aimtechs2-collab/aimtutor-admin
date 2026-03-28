@@ -153,18 +153,16 @@ async function dispatch(
   const searchParams = new URL(req.url).searchParams;
 
   try {
-    // If a user is signed-in, we’ll map them to a DB user for "student" endpoints
-    // and for enrollment-aware course details.
-    const { userId } = await auth();
-    let dbUserId: number | null = null;
-    if (userId) {
+    /** DB user id for course detail reads only — avoid calling requireDbUser on every API hit (admin writes would pay 2× Clerk). */
+    const getDbUserIdForCourseRead = async (): Promise<number | null> => {
+      const { userId } = await auth();
+      if (!userId) return null;
       try {
-        dbUserId = (await requireDbUser()).id;
+        return (await requireDbUser()).id;
       } catch {
-        // Keep public and non-user-bound reads working even if Clerk->DB sync lags.
-        dbUserId = null;
+        return null;
       }
-    }
+    };
 
     // Public endpoints (student landing / geo pages)
     if (joined === "public/get-mastercategories" && method === "POST") {
@@ -221,12 +219,14 @@ async function dispatch(
 
     if (pathSegments[0] === "public" && pathSegments[1] === "get-courses" && method === "POST") {
       const courseId = Number(pathSegments[2]);
+      const dbUserId = await getDbUserIdForCourseRead();
       const res = await getCourseById(courseId, searchParams, dbUserId);
       return "status" in res ? json(res.json, res.status) : json(res);
     }
 
     if (pathSegments[0] === "courses" && pathSegments[1] === "get-courses" && method === "POST") {
       const courseId = Number(pathSegments[2]);
+      const dbUserId = await getDbUserIdForCourseRead();
       const res = await getCourseById(courseId, searchParams, dbUserId);
       return "status" in res ? json(res.json, res.status) : json(res);
     }

@@ -1,10 +1,16 @@
 import { requireDbUser } from "@backend/lib/auth";
 import { prisma } from "@backend/lib/prisma";
+import { withDbRetry } from "@backend/lib/dbRetry";
 import { invalidateCachePattern } from "@/lib/redis";
 
-async function invalidateCourseCaches() {
-  await invalidateCachePattern("public:courses*");
-  await invalidateCachePattern("public:course:*");
+/** Fire-and-forget: Redis SCAN can take seconds; blocking the HTTP response makes lesson creates look "stuck". */
+function invalidateCourseCaches() {
+  void Promise.all([
+    invalidateCachePattern("public:courses*"),
+    invalidateCachePattern("public:course:*"),
+  ]).catch((err) => {
+    console.warn("[invalidateCourseCaches]", err);
+  });
 }
 
 async function ensureAdmin() {
@@ -28,7 +34,7 @@ export async function createModule(courseId: number, body: any) {
       isPreview: Boolean(body?.is_preview ?? false),
     },
   });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Module created successfully", module: created };
 }
 
@@ -55,7 +61,7 @@ export async function updateModule(moduleId: number, body: any) {
   if (body?.order !== undefined) data.sortOrder = Number(body.order);
   if (body?.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
   const updated = await prisma.courseModule.update({ where: { id: moduleId }, data });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Module updated successfully", module: updated };
 }
 
@@ -63,7 +69,7 @@ export async function deleteModule(moduleId: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   await prisma.courseModule.delete({ where: { id: moduleId } });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Module deleted successfully" };
 }
 
@@ -84,18 +90,20 @@ export async function createLesson(moduleId: number, body: any) {
       isPreview: Boolean(body?.is_preview ?? false),
     },
   });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson created successfully", lesson: created };
 }
 
 export async function getLessons(searchParams: URLSearchParams) {
   const moduleId = Number(searchParams.get("module_id"));
   const where = Number.isFinite(moduleId) ? { moduleId } : undefined;
-  const lessons = await prisma.lesson.findMany({
-    where,
-    orderBy: { sortOrder: "asc" },
-    include: { resources: true },
-  });
+  const lessons = await withDbRetry(() =>
+    prisma.lesson.findMany({
+      where,
+      orderBy: { sortOrder: "asc" },
+      include: { resources: true },
+    }),
+  );
   return { lessons };
 }
 
@@ -117,7 +125,7 @@ export async function updateLesson(lessonId: number, body: any) {
   if (body?.order !== undefined) data.sortOrder = Number(body.order);
   if (body?.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
   const updated = await prisma.lesson.update({ where: { id: lessonId }, data });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson updated successfully", lesson: updated };
 }
 
@@ -125,7 +133,7 @@ export async function deleteLesson(lessonId: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   await prisma.lesson.delete({ where: { id: lessonId } });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson deleted successfully" };
 }
 
@@ -146,7 +154,7 @@ export async function createLessonResource(lessonId: number, body: any) {
       isActive: body?.is_active === undefined ? false : Boolean(body.is_active),
     },
   });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson resource created successfully", resource: created };
 }
 
@@ -174,7 +182,7 @@ export async function updateLessonResource(resourceId: number, body: any) {
   if (body?.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
   if (body?.is_active !== undefined) data.isActive = Boolean(body.is_active);
   const updated = await prisma.lessonResource.update({ where: { id: resourceId }, data });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson resource updated successfully", resource: updated };
 }
 
@@ -182,13 +190,17 @@ export async function deleteLessonResource(resourceId: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   await prisma.lessonResource.delete({ where: { id: resourceId } });
-  await invalidateCourseCaches();
+  invalidateCourseCaches();
   return { message: "Lesson resource deleted successfully" };
 }
 
 export async function createPrerequisite(courseId: number, body: any) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
+  if (!Number.isFinite(courseId) || courseId <= 0) {
+    return { status: 400, json: { error: "Invalid course id", message: "Invalid course id" } } as const;
+  }
+
   // Legacy UI sends either:
   // - { prerequisite_course_ids: number[] }
   // - or a single { prerequisite_course_id } / { prereq_id }
@@ -202,72 +214,84 @@ export async function createPrerequisite(courseId: number, body: any) {
 
   const prereqIds = prereqIdsRaw
     .map((v: any) => Number(v))
-    .filter((id: number) => Number.isFinite(id));
+    .filter((id: number) => Number.isFinite(id) && id > 0 && id !== courseId);
 
   if (!prereqIds.length) {
-    return { status: 400, json: { error: "prerequisite_course_ids is required" } } as const;
+    return {
+      status: 400,
+      json: { error: "prerequisite_course_ids is required", message: "Select at least one prerequisite course" },
+    } as const;
+  }
+
+  const host = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true } });
+  if (!host) {
+    return { status: 404, json: { error: "Course not found", message: "Course not found" } } as const;
+  }
+
+  const existingTargets = await prisma.course.findMany({
+    where: { id: { in: prereqIds } },
+    select: { id: true },
+  });
+  const validIds = prereqIds.filter((id) => existingTargets.some((c) => c.id === id));
+  if (!validIds.length) {
+    return {
+      status: 400,
+      json: { error: "Invalid prerequisite ids", message: "No matching prerequisite courses found" },
+    } as const;
   }
 
   try {
-    for (const prereqId of prereqIds) {
-      await prisma.$executeRawUnsafe(
-        `
-        INSERT INTO course_prerequisite_courses (course_id, prerequisite_course_id, created_at)
-        VALUES ($1, $2, NOW())
-        `,
-        courseId,
-        prereqId,
-      );
-    }
-    await invalidateCourseCaches();
+    await prisma.coursePrerequisite.createMany({
+      data: validIds.map((prerequisiteCourseId) => ({ courseId, prerequisiteCourseId })),
+      skipDuplicates: true,
+    });
+    invalidateCourseCaches();
     return { message: "Prerequisites added successfully" };
-  } catch {
-    return { status: 500, json: { error: "Failed to add prerequisites" } } as const;
+  } catch (e: unknown) {
+    console.error("[createPrerequisite]", e);
+    return { status: 500, json: { error: "Failed to add prerequisites", message: "Failed to add prerequisites" } } as const;
   }
 }
 
 export async function getPrerequisites(courseId: number) {
   try {
-    const rows = (await prisma.$queryRawUnsafe(
-      `
-      SELECT
-        cpc.id,
-        cpc.course_id,
-        cpc.prerequisite_course_id,
-        cpc.created_at,
-        c.title,
-        c.difficulty_level,
-        c.status,
-        c.price,
-        u.first_name,
-        u.last_name,
-        u.id AS instructor_user_id
-      FROM course_prerequisite_courses cpc
-      JOIN courses c ON c.id = cpc.prerequisite_course_id
-      LEFT JOIN users u ON u.id = c.instructor_id
-      WHERE cpc.course_id = $1
-      ORDER BY cpc.created_at DESC
-      `,
-      courseId,
-    )) as any[];
+    const rows = await prisma.coursePrerequisite.findMany({
+      where: { courseId },
+      include: {
+        prerequisiteCourse: {
+          include: {
+            instructor: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
     return {
-      prerequisites: rows.map((row: any) => ({
-        id: row.id,
-        course_id: row.course_id,
-        prerequisite_course_id: row.prerequisite_course_id,
-        created_at: row.created_at,
-        prerequisite_course: {
-          title: row.title ?? null,
-          difficulty_level: row.difficulty_level ?? null,
-          status: row.status ?? null,
-          price: row.price ?? null,
-          instructor_name:
-            row.first_name || row.last_name ? `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() : null,
-        },
-      })),
+      prerequisites: rows.map((row) => {
+        const c = row.prerequisiteCourse;
+        const u = c.instructor;
+        return {
+          id: row.id,
+          course_id: row.courseId,
+          prerequisite_course_id: row.prerequisiteCourseId,
+          created_at: row.createdAt,
+          prerequisite_course: {
+            id: c.id,
+            title: c.title,
+            difficulty_level: c.difficultyLevel,
+            status: c.status,
+            price: c.price != null ? Number(c.price) : null,
+            instructor_name:
+              u && (u.firstName || u.lastName)
+                ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                : null,
+          },
+        };
+      }),
     };
-  } catch {
+  } catch (e: unknown) {
+    console.error("[getPrerequisites]", e);
     return { prerequisites: [] };
   }
 }
@@ -276,14 +300,16 @@ export async function deletePrerequisiteById(prereqRowId: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   try {
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM course_prerequisite_courses WHERE id = $1`,
-      prereqRowId,
-    );
-    await invalidateCourseCaches();
+    await prisma.coursePrerequisite.delete({ where: { id: prereqRowId } });
+    invalidateCourseCaches();
     return { message: "Prerequisite removed successfully" };
-  } catch {
-    return { status: 500, json: { error: "Failed to remove prerequisite" } } as const;
+  } catch (e: unknown) {
+    const code = (e as { code?: string })?.code;
+    if (code === "P2025") {
+      return { status: 404, json: { error: "Prerequisite not found", message: "Prerequisite not found" } } as const;
+    }
+    console.error("[deletePrerequisiteById]", e);
+    return { status: 500, json: { error: "Failed to remove prerequisite", message: "Failed to remove prerequisite" } } as const;
   }
 }
 
@@ -291,15 +317,17 @@ export async function deletePrerequisite(courseId: number, prereqId: number) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   try {
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM course_prerequisite_courses WHERE course_id = $1 AND prerequisite_course_id = $2`,
-      courseId,
-      prereqId,
-    );
-    await invalidateCourseCaches();
+    const res = await prisma.coursePrerequisite.deleteMany({
+      where: { courseId, prerequisiteCourseId: prereqId },
+    });
+    if (res.count === 0) {
+      return { status: 404, json: { error: "Prerequisite not found", message: "Prerequisite not found" } } as const;
+    }
+    invalidateCourseCaches();
     return { message: "Prerequisite removed successfully" };
-  } catch {
-    return { status: 500, json: { error: "Failed to remove prerequisite" } } as const;
+  } catch (e: unknown) {
+    console.error("[deletePrerequisite]", e);
+    return { status: 500, json: { error: "Failed to remove prerequisite", message: "Failed to remove prerequisite" } } as const;
   }
 }
 
@@ -311,20 +339,29 @@ export async function updatePrerequisite(courseId: number, body: any) {
   if (!Number.isFinite(oldPrereqId) || !Number.isFinite(newPrereqId)) {
     return { status: 400, json: { error: "old_prerequisite_course_id and new_prerequisite_course_id are required" } } as const;
   }
+  if (newPrereqId === courseId) {
+    return { status: 400, json: { error: "A course cannot be its own prerequisite" } } as const;
+  }
   try {
-    await prisma.$executeRawUnsafe(
-      `
-      UPDATE course_prerequisite_courses
-      SET prerequisite_course_id = $1
-      WHERE course_id = $2 AND prerequisite_course_id = $3
-      `,
-      newPrereqId,
-      courseId,
-      oldPrereqId,
-    );
-    await invalidateCourseCaches();
+    const target = await prisma.course.findUnique({ where: { id: newPrereqId }, select: { id: true } });
+    if (!target) {
+      return { status: 400, json: { error: "New prerequisite course not found" } } as const;
+    }
+    const updated = await prisma.coursePrerequisite.updateMany({
+      where: { courseId, prerequisiteCourseId: oldPrereqId },
+      data: { prerequisiteCourseId: newPrereqId },
+    });
+    if (updated.count === 0) {
+      return { status: 404, json: { error: "Prerequisite link not found" } } as const;
+    }
+    invalidateCourseCaches();
     return { message: "Prerequisite updated successfully" };
-  } catch {
+  } catch (e: unknown) {
+    const code = (e as { code?: string })?.code;
+    if (code === "P2002") {
+      return { status: 409, json: { error: "That prerequisite is already set for this course" } } as const;
+    }
+    console.error("[updatePrerequisite]", e);
     return { status: 500, json: { error: "Failed to update prerequisite" } } as const;
   }
 }

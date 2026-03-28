@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api } from "@/lib/admin-api-client";
+import { thumbnailUrl } from "@/lib/staticUrl";
 
 type PaymentUser = {
   first_name?: string | null;
@@ -876,7 +877,7 @@ export default function ManagePaymentsStrictClient() {
                     {selectedPayment.course?.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={selectedPayment.course.thumbnail}
+                        src={thumbnailUrl(selectedPayment.course.thumbnail) ?? ""}
                         alt=""
                         className="w-14 h-10 rounded object-cover flex-shrink-0"
                       />

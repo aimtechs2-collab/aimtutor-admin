@@ -107,4 +107,3 @@ export async function requireDbUser(): Promise<DbUserDTO> {
     updatedAt: dbUser.updatedAt,
   };
 }
-

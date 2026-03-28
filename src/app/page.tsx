@@ -11,7 +11,7 @@ export default function Home() {
 
         <div className="flex flex-col justify-center gap-4 md:flex-row">
           <Link
-            href="/login"
+            href="/sign-in"
             className="w-full rounded-lg bg-blue-600 px-6 py-3 text-white shadow-md transition-all duration-300 ease-in-out hover:scale-105 hover:bg-blue-700 md:w-auto"
           >
             Login

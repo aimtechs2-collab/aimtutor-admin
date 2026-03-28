@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { SignIn } from "@clerk/nextjs";
+import { SignIn, SignOutButton, useAuth } from "@clerk/nextjs";
+import { resolvePostAuthRedirect } from "@/lib/postAuthRedirect";
 
 function LockIcon({ className }: { className?: string }) {
   return (
@@ -40,28 +41,27 @@ function SparklesIcon({ className }: { className?: string }) {
 }
 
 export function ClerkAdminLoginPageContent() {
+  const { isLoaded } = useAuth();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect");
 
-  const fallbackRedirect = "/admin/dashboard";
+  const forceRedirectUrl = useMemo(
+    () => resolvePostAuthRedirect(searchParams),
+    [searchParams],
+  );
 
-  const forceRedirectUrl = useMemo(() => {
-    if (!redirect) return fallbackRedirect;
-    try {
-      const decoded = decodeURIComponent(redirect);
-      // Clerk sometimes sends the original location as `redirect`.
-      // For the admin portal we never want to bounce back to `/`.
-      if (decoded === "/" || decoded === "") return fallbackRedirect;
-      if (decoded === "/admin" || decoded.startsWith("/admin/")) return decoded;
-      return fallbackRedirect;
-    } catch {
-      return fallbackRedirect;
-    }
-  }, [redirect, fallbackRedirect]);
+  if (!isLoaded) {
+    return (
+      <section className="flex min-h-dvh flex-col justify-center bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-6 md:px-6 md:py-8">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200/80 bg-white/80 px-6 py-10 text-center text-sm text-slate-500 shadow-sm backdrop-blur-sm">
+          Loading…
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="mt-24 min-h-[calc(100vh-220px)] bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-8 md:px-6 md:py-10">
-      <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_1fr]">
+    <section className="flex min-h-dvh flex-col justify-center bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto grid w-full max-w-5xl items-center gap-6 lg:grid-cols-[1.05fr_1fr]">
         <div className="hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-900 p-10 text-white shadow-2xl lg:block">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium">
             <SparklesIcon className="h-4 w-4" />
@@ -85,13 +85,22 @@ export function ClerkAdminLoginPageContent() {
           </div>
         </div>
 
-        <div className="flex items-start justify-center lg:pt-1">
+        <div className="flex flex-col items-center justify-center gap-3">
           <SignIn
-            routing="hash"
+            path="/sign-in"
+            routing="path"
             signUpUrl="/sign-up"
             forceRedirectUrl={forceRedirectUrl}
             appearance={{ elements: { rootBox: "w-full max-w-md" } }}
           />
+          <p className="max-w-md text-center text-xs text-slate-500">
+            Wrong account or stuck?{" "}
+            <SignOutButton redirectUrl="/sign-in">
+              <span className="font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-800">
+                Sign out of this browser
+              </span>
+            </SignOutButton>
+          </p>
         </div>
       </div>
     </section>

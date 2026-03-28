@@ -5,8 +5,16 @@ import AdminShell from "./AdminShell";
 import { requireDbUser } from "@backend/lib/auth";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
+  const authState = await auth();
+  if (!authState.userId) {
+    if (
+      "redirectToSignIn" in authState &&
+      typeof authState.redirectToSignIn === "function"
+    ) {
+      return authState.redirectToSignIn({ returnBackUrl: "/admin/dashboard" });
+    }
+    redirect("/sign-in");
+  }
 
   const dbUser = await requireDbUser();
   if (dbUser.role !== "admin") redirect("/");

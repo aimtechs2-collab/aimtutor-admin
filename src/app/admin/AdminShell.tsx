@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import HeaderSearch from "@/components/admin/HeaderSearch";
 import LogoutButton from "@/components/admin/LogoutButton";
+import AimTutorLogo from "@/components/brand/AimTutorLogo";
 
 type ShellProps = {
   children: React.ReactNode;
@@ -260,16 +261,10 @@ export default function AdminShell({ children, welcomeName }: ShellProps) {
         `}
       >
         <div className="p-4 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0 overflow-hidden">
-              {/* Use public asset for Next.js */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/aim-technologies.png" alt="Aim Technologies" className="w-full h-full object-contain" />
-            </div>
+          <div className="flex flex-col gap-1 min-w-0">
+            <AimTutorLogo variant="default" size="sm" className="max-w-full" />
             {(sidebarExpanded || (isMobile && mobileMenuOpen)) && (
-              <div className="font-bold text-lg sm:text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent truncate flex items-center gap-2">
-                <span>Admin Portal</span>
-              </div>
+              <div className="font-semibold text-xs sm:text-sm text-gray-600 truncate">Admin Portal</div>
             )}
           </div>
         </div>

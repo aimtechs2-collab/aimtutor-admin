@@ -2,36 +2,46 @@
 
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { SignUp } from "@clerk/nextjs";
+import { SignOutButton, SignUp, useAuth } from "@clerk/nextjs";
+import { resolvePostAuthRedirect } from "@/lib/postAuthRedirect";
 
 export function ClerkAdminSignupPageContent() {
+  const { isLoaded } = useAuth();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect");
 
-  const fallbackRedirect = "/admin/dashboard";
+  const forceRedirectUrl = useMemo(
+    () => resolvePostAuthRedirect(searchParams),
+    [searchParams],
+  );
 
-  const forceRedirectUrl = useMemo(() => {
-    if (!redirect) return fallbackRedirect;
-    try {
-      const decoded = decodeURIComponent(redirect);
-      // Never allow signup redirect to return to `/`.
-      if (decoded === "/" || decoded === "") return fallbackRedirect;
-      if (decoded === "/admin" || decoded.startsWith("/admin/")) return decoded;
-      return fallbackRedirect;
-    } catch {
-      return fallbackRedirect;
-    }
-  }, [redirect, fallbackRedirect]);
+  if (!isLoaded) {
+    return (
+      <section className="flex min-h-dvh flex-col justify-center bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-6 md:px-6 md:py-8">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-slate-200/80 bg-white/80 px-6 py-10 text-center text-sm text-slate-500 shadow-sm backdrop-blur-sm">
+          Loading…
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="mt-24 min-h-[calc(100vh-220px)] bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-8 md:px-6 md:py-10">
-      <div className="mx-auto flex w-full max-w-5xl items-start justify-center lg:pt-1">
+    <section className="flex min-h-dvh flex-col justify-center bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/40 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center gap-3">
         <SignUp
-          routing="hash"
-          signInUrl="/login"
+          path="/sign-up"
+          routing="path"
+          signInUrl="/sign-in"
           forceRedirectUrl={forceRedirectUrl}
           appearance={{ elements: { rootBox: "w-full max-w-md" } }}
         />
+        <p className="max-w-md text-center text-xs text-slate-500">
+          Need a different account?{" "}
+          <SignOutButton redirectUrl="/sign-up">
+            <span className="font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-800">
+              Sign out of this browser
+            </span>
+          </SignOutButton>
+        </p>
       </div>
     </section>
   );

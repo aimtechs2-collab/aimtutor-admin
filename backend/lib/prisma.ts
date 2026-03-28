@@ -10,6 +10,9 @@ if (!connectionString) {
   throw new Error("Missing DATABASE_URL in environment");
 }
 
+// Neon: prefer the *-pooler* host + `pgbouncer=true` (or Neon’s Prisma template) so
+// connections survive long requests (e.g. lesson video uploads) without "Server has closed the connection".
+
 const adapter = new PrismaPg({ connectionString });
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter, log: ["error"] });

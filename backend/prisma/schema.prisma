@@ -106,7 +106,26 @@ model Course {
   certificates Certificate[]
   liveSessions LiveSession[]
 
+  /// Rows where this course requires other courses first (many-to-many).
+  coursePrerequisites    CoursePrerequisite[] @relation("CoursePrerequisiteFor")
+  /// Rows where other courses list this course as a prerequisite.
+  prerequisiteForCourses CoursePrerequisite[] @relation("CourseIsPrerequisite")
+
   @@map("courses")
+}
+
+/// Junction: a course may require completion of one or more other courses first.
+model CoursePrerequisite {
+  id                   Int      @id @default(autoincrement())
+  courseId             Int      @map("course_id")
+  prerequisiteCourseId Int      @map("prerequisite_course_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  course             Course @relation("CoursePrerequisiteFor", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteCourse Course @relation("CourseIsPrerequisite", fields: [prerequisiteCourseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, prerequisiteCourseId])
+  @@map("course_prerequisite_courses")
 }
 
 model CourseModule {

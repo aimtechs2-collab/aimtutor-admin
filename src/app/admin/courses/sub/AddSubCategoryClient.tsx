@@ -208,7 +208,7 @@ const SubCategoryForm = ({
 }: {
   subcategory: any | null;
   masterCategoryId: string;
-  onSuccess: (data: any, action: "created" | "updated") => void;
+  onSuccess: (data: any, action: "created" | "updated") => void | Promise<void>;
   onCancel: () => void;
 }) => {
   const [subCategoryName, setSubCategoryName] = useState("");
@@ -251,10 +251,10 @@ const SubCategoryForm = ({
 
       if (isEditMode) {
         const res = await api.put<any>(`/api/v1/subcategories/update-subcategories/${subcategory.id}`, payload);
-        onSuccess(res.data.subcategory, "updated");
+        await Promise.resolve(onSuccess(res.data.subcategory, "updated"));
       } else {
         const res = await api.post<any>("/api/v1/subcategories/create-subcategories", payload);
-        onSuccess(res.data.subcategory, "created");
+        await Promise.resolve(onSuccess(res.data.subcategory, "created"));
       }
     } catch (err: any) {
       setErrors({
@@ -356,15 +356,22 @@ export default function AddSubCategoryClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch subcategories when master category changes
+  // Prefer subcategories embedded in the master list (one source of truth). Fallback: per-id API.
   useEffect(() => {
-    if (selectedMasterCategory) {
-      fetchSubCategories(selectedMasterCategory);
-    } else {
+    if (!selectedMasterCategory) {
       setSubCategories([]);
+      return;
+    }
+    const master = masterCategories.find((c) => String(c.id) === String(selectedMasterCategory));
+    if (master && Array.isArray(master.subcategories)) {
+      setSubCategories(master.subcategories);
+      return;
+    }
+    if (masterCategories.length > 0) {
+      fetchSubCategories(selectedMasterCategory);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMasterCategory]);
+  }, [selectedMasterCategory, masterCategories]);
 
   // Modal animation
   useEffect(() => {
@@ -387,14 +394,13 @@ export default function AddSubCategoryClient() {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [showForm]);
 
-  const fetchMasterCategories = async () => {
+  const fetchMasterCategories = useCallback(async () => {
     try {
       setMasterLoading(true);
-      // Port of: api.post("/api/v1/mastercategories/get-mastercategories")
-      // admin-nextjs exposes this via the public endpoint.
-      const res = await api.post<any>("/api/v1/public/get-mastercategories?per_page=all");
+      const res = await api.post<any>(
+        "/api/v1/public/get-mastercategories?per_page=all&subcategories=1",
+      );
       const payload = res.data ?? {};
-      // Backend returns `categories` (public handler), legacy code sometimes expects `mastercategories`.
       setMasterCategories(payload.categories || payload.mastercategories || []);
     } catch (err) {
       console.error("Failed to fetch master categories:", err);
@@ -405,13 +411,14 @@ export default function AddSubCategoryClient() {
     } finally {
       setMasterLoading(false);
     }
-  };
+  }, []);
 
   const fetchSubCategories = async (masterCategoryId: string) => {
     try {
       setSubLoading(true);
       const res = await api.post<any>(`/api/v1/mastercategories/get-mastercategories/${masterCategoryId}`);
-      setSubCategories(res.data.subcategories || res.data || []);
+      const subs = res.data?.subcategories;
+      setSubCategories(Array.isArray(subs) ? subs : []);
     } catch (err) {
       console.error("Failed to fetch subcategories:", err);
       setToast({
@@ -425,10 +432,21 @@ export default function AddSubCategoryClient() {
   };
 
   const handleFormSuccess = useCallback(
-    (data: any, action: "created" | "updated") => {
-      if (selectedMasterCategory) {
-        fetchSubCategories(selectedMasterCategory);
+    async (data: any, action: "created" | "updated") => {
+      if (action === "created" && data?.id != null && data?.name != null) {
+        setSubCategories((prev) =>
+          prev.some((s) => String(s.id) === String(data.id))
+            ? prev
+            : [...prev, { id: data.id, name: data.name }],
+        );
+      } else if (action === "updated" && data?.id != null) {
+        setSubCategories((prev) =>
+          prev.map((s) =>
+            String(s.id) === String(data.id) ? { ...s, name: data.name ?? s.name } : s,
+          ),
+        );
       }
+      await fetchMasterCategories();
       setShowForm(false);
       setEditingSubCategory(null);
       setToast({
@@ -436,7 +454,7 @@ export default function AddSubCategoryClient() {
         message: `Subcategory "${data.name}" ${action} successfully!`,
       });
     },
-    [selectedMasterCategory],
+    [fetchMasterCategories],
   );
 
   const handleEdit = useCallback((subcategory: any) => {
@@ -454,9 +472,7 @@ export default function AddSubCategoryClient() {
         type: "success",
         message: `Subcategory "${deletingSubCategory.name}" deleted successfully!`,
       });
-      if (selectedMasterCategory) {
-        fetchSubCategories(selectedMasterCategory);
-      }
+      await fetchMasterCategories();
       setDeletingSubCategory(null);
     } catch (err: any) {
       console.error(err);
@@ -518,6 +534,9 @@ export default function AddSubCategoryClient() {
                   {masterCategories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
+                      {Array.isArray(cat.subcategories)
+                        ? ` (${cat.subcategories.length} subcategories)`
+                        : ""}
                     </option>
                   ))}
                 </select>

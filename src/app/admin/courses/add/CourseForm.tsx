@@ -3,32 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Upload, Save, Loader, X } from "lucide-react";
 import { api } from "@/lib/admin-api-client";
+import { thumbnailUrl } from "@/lib/staticUrl";
 import type { CourseViewShape } from "./ViewCourseModal";
-
-const API_BASE_URL =
-  typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_STATIC_URL ?? "") : "";
-
-function getImageUrl(thumbnailPath: string | null | undefined): string | null {
-  if (!thumbnailPath) return null;
-  try {
-    if (thumbnailPath.startsWith("http://") || thumbnailPath.startsWith("https://")) {
-      const url = new URL(thumbnailPath);
-      if (!["http:", "https:"].includes(url.protocol)) return null;
-      return url.href;
-    }
-    if (!API_BASE_URL && typeof window !== "undefined") {
-      const path = thumbnailPath.startsWith("/") ? thumbnailPath : `/${thumbnailPath}`;
-      return `${window.location.origin}${path}`;
-    }
-    if (!API_BASE_URL) return null;
-    const path = thumbnailPath.startsWith("/") ? thumbnailPath.slice(1) : thumbnailPath;
-    const fullUrl = new URL(path, API_BASE_URL);
-    if (!["http:", "https:"].includes(fullUrl.protocol)) return null;
-    return fullUrl.href;
-  } catch {
-    return null;
-  }
-}
 
 type MasterCat = { id: number; name: string };
 type SubCat = { id: number; name: string };
@@ -66,7 +42,7 @@ export default function CourseForm({
   });
 
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(
-    course?.thumbnail ? getImageUrl(course.thumbnail) : null,
+    course?.thumbnail ? thumbnailUrl(course.thumbnail) : null,
   );
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);

@@ -13,9 +13,7 @@ import {
   Edit2,
   TrendingUp,
 } from "lucide-react";
-
-const API_BASE_URL =
-  typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_STATIC_URL ?? "") : "";
+import { thumbnailUrl } from "@/lib/staticUrl";
 
 const ANIMATION_DELAY = 10;
 
@@ -33,28 +31,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   Expert: "bg-red-100 text-red-800",
   default: "bg-gray-100 text-gray-800",
 };
-
-function getImageUrl(thumbnailPath: string | null | undefined): string | null {
-  if (!thumbnailPath) return null;
-  try {
-    if (thumbnailPath.startsWith("http://") || thumbnailPath.startsWith("https://")) {
-      const url = new URL(thumbnailPath);
-      if (!["http:", "https:"].includes(url.protocol)) return null;
-      return url.href;
-    }
-    if (!API_BASE_URL && typeof window !== "undefined") {
-      const path = thumbnailPath.startsWith("/") ? thumbnailPath : `/${thumbnailPath}`;
-      return `${window.location.origin}${path}`;
-    }
-    if (!API_BASE_URL) return null;
-    const path = thumbnailPath.startsWith("/") ? thumbnailPath.slice(1) : thumbnailPath;
-    const fullUrl = new URL(path, API_BASE_URL);
-    if (!["http:", "https:"].includes(fullUrl.protocol)) return null;
-    return fullUrl.href;
-  } catch {
-    return null;
-  }
-}
 
 const getStatusColor = (status: string | undefined) =>
   STATUS_COLORS[status?.toLowerCase() ?? ""] || STATUS_COLORS.default;
@@ -205,7 +181,7 @@ export default function ViewCourseModal({
                 </div>
               ) : (
                 <img
-                  src={getImageUrl(course.thumbnail) ?? ""}
+                  src={thumbnailUrl(course.thumbnail) ?? ""}
                   alt={`${course.title || "Course"} thumbnail`}
                   className="w-full h-full object-cover"
                   onError={() => setImageError(true)}
