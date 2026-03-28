@@ -1,3 +1,4 @@
+import type { CourseStatus, Prisma } from "@prisma/client";
 import { requireDbUser } from "@backend/lib/auth";
 import { prisma } from "@backend/lib/prisma";
 import { invalidateCachePattern } from "@/lib/redis";
@@ -18,7 +19,7 @@ async function ensureAdminOrInstructor() {
   return null;
 }
 
-export async function createMasterCategory(body: any) {
+export async function createMasterCategory(body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   const name = String(body?.name ?? "").trim();
@@ -29,10 +30,10 @@ export async function createMasterCategory(body: any) {
   return { message: "Master category created", category: created };
 }
 
-export async function updateMasterCategory(id: number, body: any) {
+export async function updateMasterCategory(id: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const name = String(body?.name ?? "").trim();
+  const name = String(body.name ?? "").trim();
   if (!name) return { status: 400, json: { error: "name is required" } } as const;
 
   const updated = await prisma.masterCategory.update({ where: { id }, data: { name } });
@@ -50,7 +51,7 @@ export async function deleteMasterCategory(id: number) {
   return { message: "Master category deleted" };
 }
 
-export async function createSubcategory(body: any) {
+export async function createSubcategory(body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   const name = String(body?.name ?? "").trim();
@@ -69,12 +70,12 @@ export async function createSubcategory(body: any) {
   return { message: "Subcategory created", subcategory: created };
 }
 
-export async function updateSubcategory(id: number, body: any) {
+export async function updateSubcategory(id: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const data: any = {};
-  if (typeof body?.name === "string") data.name = body.name.trim();
-  if (body?.master_category_id !== undefined) data.masterCategoryId = Number(body.master_category_id);
+  const data: Prisma.SubCategoryUncheckedUpdateInput = {};
+  if (typeof body.name === "string") data.name = body.name.trim();
+  if (body.master_category_id !== undefined) data.masterCategoryId = Number(body.master_category_id);
   const existing = await prisma.subCategory.findUnique({ where: { id } });
   const updated = await prisma.subCategory.update({ where: { id }, data });
   await invalidateCachePattern("public:subcategories*");
@@ -103,51 +104,51 @@ export async function deleteSubcategory(id: number) {
   return { message: "Subcategory deleted" };
 }
 
-export async function createCourse(body: any) {
+export async function createCourse(body: Record<string, unknown>) {
   const forbidden = await ensureAdminOrInstructor();
   if (forbidden) return forbidden;
 
   const me = await requireDbUser();
-  const title = String(body?.title ?? "").trim();
-  let instructorId = Number(body?.instructor_id);
+  const title = String(body.title ?? "").trim();
+  let instructorId = Number(body.instructor_id);
   if (!Number.isFinite(instructorId)) {
     instructorId = me.id;
   }
   if (me.role === "instructor" && instructorId !== me.id) {
     return { status: 403, json: { error: "Instructors can only assign themselves as instructor" } } as const;
   }
-  const price = Number(body?.price ?? 0);
+  const price = Number(body.price ?? 0);
 
   if (!title) {
     return { status: 400, json: { error: "title is required" } } as const;
   }
 
-  const subRaw = body?.subcategory_id;
+  const subRaw = body.subcategory_id;
   const subcategoryId =
     subRaw === undefined || subRaw === null || subRaw === "" || !Number.isFinite(Number(subRaw))
       ? null
       : Number(subRaw);
 
-  let status: "draft" | "published" = "draft";
-  if (body?.status === "published") status = "published";
-  else if (body?.status === "archived") status = "draft";
+  let status: CourseStatus = "draft";
+  if (body.status === "published") status = "published";
+  else if (body.status === "archived") status = "draft";
 
   const created = await prisma.course.create({
     data: {
       title,
-      description: typeof body?.description === "string" ? body.description : null,
-      shortDescription: typeof body?.short_description === "string" ? body.short_description : null,
+      description: typeof body.description === "string" ? body.description : null,
+      shortDescription: typeof body.short_description === "string" ? body.short_description : null,
       subcategoryId,
       instructorId,
       price,
-      currency: typeof body?.currency === "string" ? body.currency : "USD",
-      durationHours: Number.isFinite(Number(body?.duration_hours)) ? Number(body.duration_hours) : null,
-      difficultyLevel: typeof body?.difficulty_level === "string" ? body.difficulty_level : null,
-      thumbnail: typeof body?.thumbnail === "string" ? body.thumbnail : null,
+      currency: typeof body.currency === "string" ? body.currency : "USD",
+      durationHours: Number.isFinite(Number(body.duration_hours)) ? Number(body.duration_hours) : null,
+      difficultyLevel: typeof body.difficulty_level === "string" ? body.difficulty_level : null,
+      thumbnail: typeof body.thumbnail === "string" ? body.thumbnail : null,
       status,
-      maxStudents: Number.isFinite(Number(body?.max_students)) ? Number(body.max_students) : null,
-      prerequisites: typeof body?.prerequisites === "string" ? body.prerequisites : null,
-      learningOutcomes: typeof body?.learning_outcomes === "string" ? body.learning_outcomes : null,
+      maxStudents: Number.isFinite(Number(body.max_students)) ? Number(body.max_students) : null,
+      prerequisites: typeof body.prerequisites === "string" ? body.prerequisites : null,
+      learningOutcomes: typeof body.learning_outcomes === "string" ? body.learning_outcomes : null,
     },
   });
 
@@ -165,7 +166,7 @@ export async function createCourse(body: any) {
   return { message: "Course created", course: created };
 }
 
-export async function updateCourse(id: number, body: any) {
+export async function updateCourse(id: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   const existing = await prisma.course.findUnique({
@@ -175,22 +176,23 @@ export async function updateCourse(id: number, body: any) {
   if (!existing) {
     return { status: 404, json: { error: "Course not found" } } as const;
   }
-  const data: any = {};
-  if (typeof body?.title === "string") data.title = body.title;
-  if (typeof body?.description === "string" || body?.description === null) data.description = body.description;
-  if (typeof body?.short_description === "string" || body?.short_description === null) data.shortDescription = body.short_description;
-  if (body?.subcategory_id !== undefined) data.subcategoryId = body.subcategory_id === null ? null : Number(body.subcategory_id);
-  if (body?.instructor_id !== undefined) data.instructorId = Number(body.instructor_id);
-  if (body?.price !== undefined) data.price = Number(body.price);
-  if (typeof body?.currency === "string") data.currency = body.currency;
-  if (body?.duration_hours !== undefined) data.durationHours = body.duration_hours === null ? null : Number(body.duration_hours);
-  if (typeof body?.difficulty_level === "string" || body?.difficulty_level === null) data.difficultyLevel = body.difficulty_level;
-  if (typeof body?.thumbnail === "string" || body?.thumbnail === null) data.thumbnail = body.thumbnail;
-  if (body?.status === "draft" || body?.status === "published") data.status = body.status;
-  else if (body?.status === "archived") data.status = "draft";
-  if (body?.max_students !== undefined) data.maxStudents = body.max_students === null ? null : Number(body.max_students);
-  if (typeof body?.prerequisites === "string" || body?.prerequisites === null) data.prerequisites = body.prerequisites;
-  if (typeof body?.learning_outcomes === "string" || body?.learning_outcomes === null) data.learningOutcomes = body.learning_outcomes;
+  const data: Prisma.CourseUncheckedUpdateInput = {};
+  if (typeof body.title === "string") data.title = body.title;
+  if (typeof body.description === "string" || body.description === null) data.description = body.description;
+  if (typeof body.short_description === "string" || body.short_description === null)
+    data.shortDescription = body.short_description;
+  if (body.subcategory_id !== undefined) data.subcategoryId = body.subcategory_id === null ? null : Number(body.subcategory_id);
+  if (body.instructor_id !== undefined) data.instructorId = Number(body.instructor_id);
+  if (body.price !== undefined) data.price = Number(body.price);
+  if (typeof body.currency === "string") data.currency = body.currency;
+  if (body.duration_hours !== undefined) data.durationHours = body.duration_hours === null ? null : Number(body.duration_hours);
+  if (typeof body.difficulty_level === "string" || body.difficulty_level === null) data.difficultyLevel = body.difficulty_level;
+  if (typeof body.thumbnail === "string" || body.thumbnail === null) data.thumbnail = body.thumbnail;
+  if (body.status === "draft" || body.status === "published") data.status = body.status;
+  else if (body.status === "archived") data.status = "draft";
+  if (body.max_students !== undefined) data.maxStudents = body.max_students === null ? null : Number(body.max_students);
+  if (typeof body.prerequisites === "string" || body.prerequisites === null) data.prerequisites = body.prerequisites;
+  if (typeof body.learning_outcomes === "string" || body.learning_outcomes === null) data.learningOutcomes = body.learning_outcomes;
 
   const updated = await prisma.course.update({ where: { id }, data });
 
