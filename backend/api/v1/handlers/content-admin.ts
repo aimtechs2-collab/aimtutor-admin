@@ -265,12 +265,12 @@ export async function createPrerequisite(courseId: number, body: Record<string, 
       where: { courseId, prerequisiteCourseId: { in: validIds } },
       select: { prerequisiteCourseId: true },
     });
-    const existingIds = new Set(existing.map((e) => e.prerequisiteCourseId));
+    const existingIds = new Set(existing.map((e: any) => e.prerequisiteCourseId));
     const newIds = validIds.filter((id) => !existingIds.has(id));
 
     if (newIds.length > 0) {
       await prisma.coursePrerequisite.createMany({
-        data: newIds.map((prerequisiteCourseId) => ({ courseId, prerequisiteCourseId })),
+        data: newIds.map((prerequisiteCourseId: any) => ({ courseId, prerequisiteCourseId })),
       });
     }
     invalidateCourseCaches();
@@ -296,7 +296,7 @@ export async function getPrerequisites(courseId: number) {
     });
 
     return {
-      prerequisites: rows.map((row) => {
+      prerequisites: rows.map((row: any) => {
         const c = row.prerequisiteCourse;
         const u = c.instructor;
         return {

@@ -48,7 +48,7 @@ export async function getPaymentHistoryAdmin(searchParams: URLSearchParams) {
 
     const total = totalRows[0]?.total ?? 0;
     return {
-      payments: rows.map((r) => ({
+      payments: rows.map((r: any) => ({
         id: r.id,
         user_id: r.user_id,
         course_id: r.course_id,
@@ -165,7 +165,7 @@ export async function getAllCertificatesAdmin(searchParams: URLSearchParams) {
     const rows = (await prisma.$queryRawUnsafe(listQ, ...params, perPage, offset)) as any[];
     const total = totalRows[0]?.total ?? 0;
     return {
-      certificates: rows.map((r) => ({
+      certificates: rows.map((r: any) => ({
         ...r,
         issued_at: new Date(r.issued_at).toISOString(),
       })),
@@ -293,7 +293,7 @@ export async function getLiveSessionsAdmin(searchParams: URLSearchParams) {
     const rows = (await prisma.$queryRawUnsafe(listQ, ...params, perPage, offset)) as any[];
     const total = totalRows[0]?.total ?? 0;
     return {
-      live_sessions: rows.map((r) => ({
+      live_sessions: rows.map((r: any) => ({
         ...r,
         scheduled_at: new Date(r.scheduled_at).toISOString(),
         created_at: new Date(r.created_at).toISOString(),
@@ -422,7 +422,7 @@ export async function getUpcomingLiveSessionsAdmin() {
       `,
     )) as any[];
     return {
-      upcoming_sessions: rows.map((r) => ({
+      upcoming_sessions: rows.map((r: any) => ({
         ...r,
         scheduled_at: new Date(r.scheduled_at).toISOString(),
         created_at: new Date(r.created_at).toISOString(),
@@ -449,7 +449,7 @@ export async function getCourseLiveSessionsAdmin(courseId: number) {
     return {
       course_id: courseId,
       course_title: rows[0].title,
-      live_sessions: sessions.map((s) => ({
+      live_sessions: sessions.map((s: any) => ({
         ...s,
         scheduled_at: new Date(s.scheduled_at).toISOString(),
         created_at: new Date(s.created_at).toISOString(),
@@ -482,7 +482,7 @@ export async function getCourseCertificatesAdmin(courseId: number) {
     return {
       course_id: courseId,
       course_title: course[0].title,
-      certificates: certs.map((c) => ({
+      certificates: certs.map((c: any) => ({
         ...c,
         issued_at: new Date(c.issued_at).toISOString(),
       })),
@@ -817,7 +817,7 @@ export async function getUserCertificates() {
       me.id,
     )) as any[];
     return {
-      certificates: rows.map((r) => ({
+      certificates: rows.map((r: any) => ({
         ...r,
         issued_at: new Date(r.issued_at).toISOString(),
         course: { id: r.course_id, title: r.course_title },

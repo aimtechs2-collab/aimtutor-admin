@@ -1,4 +1,4 @@
-import type { CourseStatus, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { requireDbUser } from "@backend/lib/auth";
 import { prisma } from "@backend/lib/prisma";
 import { invalidateCachePattern } from "@/lib/redis";
@@ -129,7 +129,7 @@ export async function createCourse(body: Record<string, unknown>) {
       ? null
       : Number(subRaw);
 
-  let status: CourseStatus = "draft";
+  let status: any = "draft";
   if (body.status === "published") status = "published";
   else if (body.status === "archived") status = "draft";
 

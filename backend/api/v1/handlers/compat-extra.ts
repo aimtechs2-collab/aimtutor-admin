@@ -43,7 +43,7 @@ export async function getMyCourses() {
     orderBy: { createdAt: "desc" },
   });
   return {
-    courses: courses.map((c) => toCourseBaseDict(c, c.enrollments.length)),
+    courses: courses.map((c: any) => toCourseBaseDict(c, c.enrollments.length)),
   };
 }
 
@@ -71,7 +71,7 @@ export async function getCourseEnrollments(courseId: number) {
     orderBy: { enrolledAt: "desc" },
   });
   return {
-    enrollments: rows.map((r) => ({
+    enrollments: rows.map((r: any) => ({
       id: r.id,
       user_id: r.userId,
       course_id: r.courseId,
@@ -168,7 +168,7 @@ export async function broadcastNotification(body: any) {
   const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });
   if (!users.length) return { message: "Broadcast completed", sent: 0 };
   const created = await prisma.notification.createMany({
-    data: users.map((u) => ({
+    data: users.map((u: any) => ({
       userId: u.id,
       title,
       message,
@@ -221,7 +221,7 @@ export async function sendCourseNotification(body: any) {
   });
   if (!enrollments.length) return { message: "No active learners for this course", sent: 0 };
   const created = await prisma.notification.createMany({
-    data: enrollments.map((e) => ({
+    data: enrollments.map((e: any) => ({
       userId: e.userId,
       title,
       message,

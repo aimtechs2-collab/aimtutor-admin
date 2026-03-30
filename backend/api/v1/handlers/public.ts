@@ -79,7 +79,7 @@ export async function _getMastercategoriesOnly(searchParams: URLSearchParams) {
       orderBy: { id: "asc" },
     });
 
-    const categoriesData = categories.map((cat) => {
+    const categoriesData = categories.map((cat: any) => {
       if (!shouldIncludeSubcategories) {
         return { id: cat.id, name: cat.name };
       }
@@ -142,7 +142,7 @@ export async function _getMastercategoriesOnly(searchParams: URLSearchParams) {
     orderBy: { id: "asc" },
   });
 
-  const categoriesData = categories.map((cat) => {
+  const categoriesData = categories.map((cat: any) => {
     if (!shouldIncludeSubcategories) {
       return { id: cat.id, name: cat.name };
     }
@@ -209,7 +209,7 @@ export async function _getMastercategoryById(categoryId: number, coursesQuery: s
   }
 
   // Note: We currently return minimal course dicts. You can extend to module/lesson parity later.
-  const subcategories = category.subcategories.map((sub) => {
+  const subcategories = category.subcategories.map((sub: any) => {
     if (!includeCourses) {
       return { id: sub.id, name: sub.name };
     }
@@ -254,12 +254,12 @@ export async function _getAllSubcategories(searchParams: URLSearchParams) {
       orderBy: { id: "asc" },
     });
     return {
-      subcategories: subs.map((sub) => ({
+      subcategories: subs.map((sub: any) => ({
         id: sub.id,
         name: sub.name,
         ...(includeCourses
           ? {
-              courses: (((sub as any).courses as any[]) ?? []).map((c) => ({
+              courses: (((sub as any).courses as any[]) ?? []).map((c: any) => ({
                 ...toCourseBaseDict(
                   c as Course & { instructor?: any },
                   // enrollment count computed lazily later if needed
@@ -290,12 +290,12 @@ export async function _getAllSubcategories(searchParams: URLSearchParams) {
   });
 
   return {
-    subcategories: subs.map((sub) => ({
+    subcategories: subs.map((sub: any) => ({
       id: sub.id,
       name: sub.name,
       ...(includeCourses
         ? {
-            courses: ((((sub as any).courses as any[]) ?? []).map((c) => {
+            courses: ((((sub as any).courses as any[]) ?? []).map((c: any) => {
               // Cheap placeholder; extend if UI needs exact enrollment_count.
               return toCourseBaseDict(
                 c as Course & { instructor?: any },
@@ -462,7 +462,7 @@ export async function _getCourseById(courseId: number, searchParams: URLSearchPa
 
     if (includeLessons) {
       const lessons = ((m as any).lessons as any[]) ?? [];
-      mod.lessons = lessons.map((l) => {
+      mod.lessons = lessons.map((l: any) => {
         return toLessonDict(l as any, shouldFetchResources);
       });
     }
@@ -520,7 +520,7 @@ export async function _getCourseById(courseId: number, searchParams: URLSearchPa
     orderBy: { id: "asc" },
   });
 
-  courseData.prerequisites_courses = prereqLinks.map((row) => ({
+  courseData.prerequisites_courses = prereqLinks.map((row: any) => ({
     id: row.prerequisiteCourse.id,
     title: row.prerequisiteCourse.title,
     short_description: row.prerequisiteCourse.shortDescription ?? undefined,

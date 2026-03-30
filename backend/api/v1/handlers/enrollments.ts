@@ -12,7 +12,7 @@ export async function getEnrollments() {
     include: { course: { include: { instructor: true, enrollments: true } } },
   });
 
-  const enrollment_data = enrollments.map((e) => {
+  const enrollment_data = enrollments.map((e: any) => {
     const course = e.course;
     const courseData = toCourseBaseDict(course as any, course.enrollments.length);
     return {
@@ -103,7 +103,7 @@ export async function getCourseProgress(courseId: number) {
   return {
     course_id: courseId,
     enrollment: toEnrollmentDict(enrollment),
-    lesson_progress: lessonProgress.map((lp) => ({
+    lesson_progress: lessonProgress.map((lp: any) => ({
       lesson_id: lp.lessonId,
       completed: lp.completed,
       completed_at: lp.completedAt ? lp.completedAt.toISOString() : null,
