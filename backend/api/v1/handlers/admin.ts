@@ -19,7 +19,9 @@ export async function getAdminDashboard() {
   startOfMonth.setUTCDate(1);
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
-  const [users, courses, enrollments, notifications, masterCategories, subcategories, publishedCourses, recentUsers, recentEnrollmentsRaw] =
+  // Split into two Promise.all calls to stay within TS tuple-inference limits
+  // (Turbopack's type-checker on Vercel fails with 9+ items).
+  const [users, courses, enrollments, notifications, masterCategories, subcategories, publishedCourses] =
     await Promise.all([
       prisma.user.count(),
       prisma.course.count(),
@@ -28,14 +30,17 @@ export async function getAdminDashboard() {
       prisma.masterCategory.count(),
       prisma.subCategory.count(),
       prisma.course.count({ where: { status: "published" } }),
-      prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
-      prisma.enrollment.findMany({
-        where: { isActive: true },
-        orderBy: { enrolledAt: "desc" },
-        take: 10,
-        include: { user: true, course: true },
-      }),
     ]);
+
+  const [recentUsers, recentEnrollmentsRaw] = await Promise.all([
+    prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
+    prisma.enrollment.findMany({
+      where: { isActive: true },
+      orderBy: { enrolledAt: "desc" },
+      take: 10,
+      include: { user: true, course: true },
+    }),
+  ]);
 
   let totalRevenue = 0;
   let thisMonthRevenue = 0;
@@ -69,7 +74,7 @@ export async function getAdminDashboard() {
     /* payments table optional in some environments */
   }
 
-  const recent_enrollments = recentEnrollmentsRaw.map((e) => ({
+  const recent_enrollments = recentEnrollmentsRaw.map((e: typeof recentEnrollmentsRaw[number]) => ({
     user: {
       first_name: e.user.firstName,
       last_name: e.user.lastName,
