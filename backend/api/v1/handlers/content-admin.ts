@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { requireDbUser } from "@backend/lib/auth";
 import { prisma } from "@backend/lib/prisma";
 import { withDbRetry } from "@backend/lib/dbRetry";
@@ -19,19 +20,19 @@ async function ensureAdmin() {
   return null;
 }
 
-export async function createModule(courseId: number, body: any) {
+export async function createModule(courseId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const title = String(body?.title ?? "").trim();
+  const title = String(body.title ?? "").trim();
   if (!title) return { status: 400, json: { error: "title is required" } } as const;
   const created = await prisma.courseModule.create({
     data: {
       courseId,
       title,
-      description: body?.description ?? null,
-      durationMinutes: Number.isFinite(Number(body?.duration_minutes)) ? Number(body.duration_minutes) : null,
-      sortOrder: Number.isFinite(Number(body?.order)) ? Number(body.order) : 1,
-      isPreview: Boolean(body?.is_preview ?? false),
+      description: typeof body.description === "string" ? body.description : null,
+      durationMinutes: Number.isFinite(Number(body.duration_minutes)) ? Number(body.duration_minutes) : null,
+      sortOrder: Number.isFinite(Number(body.order)) ? Number(body.order) : 1,
+      isPreview: Boolean(body.is_preview ?? false),
     },
   });
   invalidateCourseCaches();
@@ -51,15 +52,18 @@ export async function getModuleById(moduleId: number) {
   return { module: moduleItem };
 }
 
-export async function updateModule(moduleId: number, body: any) {
+export async function updateModule(moduleId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const data: any = {};
-  if (body?.title !== undefined) data.title = body.title;
-  if (body?.description !== undefined) data.description = body.description;
-  if (body?.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
-  if (body?.order !== undefined) data.sortOrder = Number(body.order);
-  if (body?.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
+  const data: Prisma.CourseModuleUncheckedUpdateInput = {};
+  if (body.title !== undefined) data.title = typeof body.title === "string" ? body.title : String(body.title);
+  if (body.description !== undefined) {
+    data.description =
+      body.description === null ? null : typeof body.description === "string" ? body.description : String(body.description);
+  }
+  if (body.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
+  if (body.order !== undefined) data.sortOrder = Number(body.order);
+  if (body.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
   const updated = await prisma.courseModule.update({ where: { id: moduleId }, data });
   invalidateCourseCaches();
   return { message: "Module updated successfully", module: updated };
@@ -73,21 +77,21 @@ export async function deleteModule(moduleId: number) {
   return { message: "Module deleted successfully" };
 }
 
-export async function createLesson(moduleId: number, body: any) {
+export async function createLesson(moduleId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const title = String(body?.title ?? "").trim();
+  const title = String(body.title ?? "").trim();
   if (!title) return { status: 400, json: { error: "title is required" } } as const;
   const created = await prisma.lesson.create({
     data: {
       moduleId,
       title,
-      content: body?.content ?? null,
-      videoUrl: body?.video_url ?? null,
-      resourceLink: body?.resource_link ?? null,
-      durationMinutes: Number.isFinite(Number(body?.duration_minutes)) ? Number(body.duration_minutes) : null,
-      sortOrder: Number.isFinite(Number(body?.order)) ? Number(body.order) : 1,
-      isPreview: Boolean(body?.is_preview ?? false),
+      content: typeof body.content === "string" ? body.content : null,
+      videoUrl: typeof body.video_url === "string" ? body.video_url : null,
+      resourceLink: typeof body.resource_link === "string" ? body.resource_link : null,
+      durationMinutes: Number.isFinite(Number(body.duration_minutes)) ? Number(body.duration_minutes) : null,
+      sortOrder: Number.isFinite(Number(body.order)) ? Number(body.order) : 1,
+      isPreview: Boolean(body.is_preview ?? false),
     },
   });
   invalidateCourseCaches();
@@ -113,17 +117,30 @@ export async function getLessonById(lessonId: number) {
   return { lesson };
 }
 
-export async function updateLesson(lessonId: number, body: any) {
+export async function updateLesson(lessonId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const data: any = {};
-  if (body?.title !== undefined) data.title = body.title;
-  if (body?.content !== undefined) data.content = body.content;
-  if (body?.video_url !== undefined) data.videoUrl = body.video_url;
-  if (body?.resource_link !== undefined) data.resourceLink = body.resource_link;
-  if (body?.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
-  if (body?.order !== undefined) data.sortOrder = Number(body.order);
-  if (body?.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
+  const data: Prisma.LessonUncheckedUpdateInput = {};
+  if (body.title !== undefined) data.title = typeof body.title === "string" ? body.title : String(body.title);
+  if (body.content !== undefined) {
+    data.content =
+      body.content === null ? null : typeof body.content === "string" ? body.content : String(body.content);
+  }
+  if (body.video_url !== undefined) {
+    data.videoUrl =
+      body.video_url === null ? null : typeof body.video_url === "string" ? body.video_url : String(body.video_url);
+  }
+  if (body.resource_link !== undefined) {
+    data.resourceLink =
+      body.resource_link === null
+        ? null
+        : typeof body.resource_link === "string"
+          ? body.resource_link
+          : String(body.resource_link);
+  }
+  if (body.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
+  if (body.order !== undefined) data.sortOrder = Number(body.order);
+  if (body.is_preview !== undefined) data.isPreview = Boolean(body.is_preview);
   const updated = await prisma.lesson.update({ where: { id: lessonId }, data });
   invalidateCourseCaches();
   return { message: "Lesson updated successfully", lesson: updated };
@@ -137,21 +154,21 @@ export async function deleteLesson(lessonId: number) {
   return { message: "Lesson deleted successfully" };
 }
 
-export async function createLessonResource(lessonId: number, body: any) {
+export async function createLessonResource(lessonId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const title = String(body?.title ?? "").trim();
-  const filePath = String(body?.file_path ?? "").trim();
+  const title = String(body.title ?? "").trim();
+  const filePath = String(body.file_path ?? "").trim();
   if (!title || !filePath) return { status: 400, json: { error: "title and file_path are required" } } as const;
   const created = await prisma.lessonResource.create({
     data: {
       lessonId,
       title,
       filePath,
-      fileType: body?.file_type ?? null,
-      fileSize: Number.isFinite(Number(body?.file_size)) ? Number(body.file_size) : null,
-      durationMinutes: Number.isFinite(Number(body?.duration_minutes)) ? Number(body.duration_minutes) : null,
-      isActive: body?.is_active === undefined ? false : Boolean(body.is_active),
+      fileType: typeof body.file_type === "string" ? body.file_type : null,
+      fileSize: Number.isFinite(Number(body.file_size)) ? Number(body.file_size) : null,
+      durationMinutes: Number.isFinite(Number(body.duration_minutes)) ? Number(body.duration_minutes) : null,
+      isActive: body.is_active === undefined ? false : Boolean(body.is_active),
     },
   });
   invalidateCourseCaches();
@@ -171,16 +188,19 @@ export async function getLessonResourceById(resourceId: number) {
   return { resource };
 }
 
-export async function updateLessonResource(resourceId: number, body: any) {
+export async function updateLessonResource(resourceId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const data: any = {};
-  if (body?.title !== undefined) data.title = body.title;
-  if (body?.file_path !== undefined) data.filePath = body.file_path;
-  if (body?.file_type !== undefined) data.fileType = body.file_type;
-  if (body?.file_size !== undefined) data.fileSize = body.file_size === null ? null : Number(body.file_size);
-  if (body?.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
-  if (body?.is_active !== undefined) data.isActive = Boolean(body.is_active);
+  const data: Prisma.LessonResourceUncheckedUpdateInput = {};
+  if (body.title !== undefined) data.title = typeof body.title === "string" ? body.title : String(body.title);
+  if (body.file_path !== undefined) data.filePath = typeof body.file_path === "string" ? body.file_path : String(body.file_path);
+  if (body.file_type !== undefined) {
+    data.fileType =
+      body.file_type === null ? null : typeof body.file_type === "string" ? body.file_type : String(body.file_type);
+  }
+  if (body.file_size !== undefined) data.fileSize = body.file_size === null ? null : Number(body.file_size);
+  if (body.duration_minutes !== undefined) data.durationMinutes = body.duration_minutes === null ? null : Number(body.duration_minutes);
+  if (body.is_active !== undefined) data.isActive = Boolean(body.is_active);
   const updated = await prisma.lessonResource.update({ where: { id: resourceId }, data });
   invalidateCourseCaches();
   return { message: "Lesson resource updated successfully", resource: updated };
@@ -194,7 +214,7 @@ export async function deleteLessonResource(resourceId: number) {
   return { message: "Lesson resource deleted successfully" };
 }
 
-export async function createPrerequisite(courseId: number, body: any) {
+export async function createPrerequisite(courseId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   if (!Number.isFinite(courseId) || courseId <= 0) {
@@ -204,17 +224,17 @@ export async function createPrerequisite(courseId: number, body: any) {
   // Legacy UI sends either:
   // - { prerequisite_course_ids: number[] }
   // - or a single { prerequisite_course_id } / { prereq_id }
-  const prereqIdsRaw = Array.isArray(body?.prerequisite_course_ids)
+  const prereqIdsRaw = Array.isArray(body.prerequisite_course_ids)
     ? body.prerequisite_course_ids
-    : body?.prerequisite_course_id != null
+    : body.prerequisite_course_id != null
       ? [body.prerequisite_course_id]
-      : body?.prereq_id != null
+      : body.prereq_id != null
         ? [body.prereq_id]
         : [];
 
   const prereqIds = prereqIdsRaw
-    .map((v: any) => Number(v))
-    .filter((id: number) => Number.isFinite(id) && id > 0 && id !== courseId);
+    .map((v) => Number(v))
+    .filter((id) => Number.isFinite(id) && id > 0 && id !== courseId);
 
   if (!prereqIds.length) {
     return {
@@ -241,10 +261,18 @@ export async function createPrerequisite(courseId: number, body: any) {
   }
 
   try {
-    await prisma.coursePrerequisite.createMany({
-      data: validIds.map((prerequisiteCourseId) => ({ courseId, prerequisiteCourseId })),
-      skipDuplicates: true,
+    const existing = await prisma.coursePrerequisite.findMany({
+      where: { courseId, prerequisiteCourseId: { in: validIds } },
+      select: { prerequisiteCourseId: true },
     });
+    const existingIds = new Set(existing.map((e) => e.prerequisiteCourseId));
+    const newIds = validIds.filter((id) => !existingIds.has(id));
+
+    if (newIds.length > 0) {
+      await prisma.coursePrerequisite.createMany({
+        data: newIds.map((prerequisiteCourseId) => ({ courseId, prerequisiteCourseId })),
+      });
+    }
     invalidateCourseCaches();
     return { message: "Prerequisites added successfully" };
   } catch (e: unknown) {
@@ -331,11 +359,11 @@ export async function deletePrerequisite(courseId: number, prereqId: number) {
   }
 }
 
-export async function updatePrerequisite(courseId: number, body: any) {
+export async function updatePrerequisite(courseId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
-  const oldPrereqId = Number(body?.old_prerequisite_course_id);
-  const newPrereqId = Number(body?.new_prerequisite_course_id);
+  const oldPrereqId = Number(body.old_prerequisite_course_id);
+  const newPrereqId = Number(body.new_prerequisite_course_id);
   if (!Number.isFinite(oldPrereqId) || !Number.isFinite(newPrereqId)) {
     return { status: 400, json: { error: "old_prerequisite_course_id and new_prerequisite_course_id are required" } } as const;
   }
@@ -386,10 +414,10 @@ function contactFormToLegacy(row: {
   };
 }
 
-export async function createContactForm(body: any) {
-  const name = String(body?.name ?? "").trim();
-  const email = String(body?.email ?? "").trim();
-  const phone = String(body?.phone_number ?? "").trim();
+export async function createContactForm(body: Record<string, unknown>) {
+  const name = String(body.name ?? "").trim();
+  const email = String(body.email ?? "").trim();
+  const phone = String(body.phone_number ?? "").trim();
   if (!name || !email || !phone) return { status: 400, json: { error: "name, email, and phone_number are required" } } as const;
   try {
     const row = await prisma.contactForm.create({
@@ -397,8 +425,8 @@ export async function createContactForm(body: any) {
         name,
         email,
         phoneNumber: phone,
-        message: body?.message != null ? String(body.message) : null,
-        courseInterest: body?.course_interest != null ? String(body.course_interest) : null,
+        message: body.message != null ? String(body.message) : null,
+        courseInterest: body.course_interest != null ? String(body.course_interest) : null,
       },
     });
     return { message: "Contact form submitted successfully", contact_form: contactFormToLegacy(row) };
@@ -430,7 +458,7 @@ export async function getContactForm(formId: number) {
   }
 }
 
-export async function updateContactForm(formId: number, body: any) {
+export async function updateContactForm(formId: number, body: Record<string, unknown>) {
   const forbidden = await ensureAdmin();
   if (forbidden) return forbidden;
   try {
@@ -439,11 +467,11 @@ export async function updateContactForm(formId: number, body: any) {
     const row = await prisma.contactForm.update({
       where: { id: formId },
       data: {
-        ...(typeof body?.name === "string" ? { name: body.name } : {}),
-        ...(typeof body?.email === "string" ? { email: body.email } : {}),
-        ...(typeof body?.phone_number === "string" ? { phoneNumber: body.phone_number } : {}),
-        ...(body?.message !== undefined ? { message: body.message == null ? null : String(body.message) } : {}),
-        ...(body?.course_interest !== undefined
+        ...(typeof body.name === "string" ? { name: body.name } : {}),
+        ...(typeof body.email === "string" ? { email: body.email } : {}),
+        ...(typeof body.phone_number === "string" ? { phoneNumber: body.phone_number } : {}),
+        ...(body.message !== undefined ? { message: body.message == null ? null : String(body.message) } : {}),
+        ...(body.course_interest !== undefined
           ? { courseInterest: body.course_interest == null ? null : String(body.course_interest) }
           : {}),
       },

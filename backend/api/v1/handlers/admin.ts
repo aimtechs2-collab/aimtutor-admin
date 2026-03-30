@@ -58,7 +58,7 @@ export async function getAdminDashboard() {
     ]);
     totalRevenue = Number(revAll._sum.amount ?? 0);
     thisMonthRevenue = Number(revMonth._sum.amount ?? 0);
-    recentPayments = payRows.map((p) => ({
+    recentPayments = payRows.map((p: any) => ({
       id: p.id,
       amount: Number(p.amount),
       currency: p.currency,
