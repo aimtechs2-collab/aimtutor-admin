@@ -287,7 +287,7 @@ export async function getAdminCourses(searchParams: URLSearchParams) {
   ]);
 
   return {
-    courses: courses.map((c) => ({
+    courses: courses.map((c: any) => ({
       ...toCourseBaseDict(c, c.enrollments.length),
       subcategory_id: c.subcategoryId,
       subcategory_name: c.subcategory?.name ?? null,
@@ -342,7 +342,7 @@ export async function getAdminEnrollments(searchParams: URLSearchParams) {
   ]);
 
   return {
-    enrollments: enrollments.map((e) => ({
+    enrollments: enrollments.map((e: any) => ({
       ...toEnrollmentDict(e),
       user: {
         id: e.user.id,
